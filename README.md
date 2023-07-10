@@ -28,7 +28,8 @@ data "aws_eip" "new_eip" {
 2. Gather the association ID of the current EIP association by adding the module and output below. We need to refer the module to the firenet instance that was created previously, for example through the [firenet module](https://github.com/terraform-aviatrix-modules/terraform-aviatrix-mc-firenet). This returns a list of all created firenet instances as an output. Use the list index to specify which instance you want to select. Change \<module_name\> to whatever name you have given the firenet module. We will also provide the new EIP allocation ID while we're at it.
 ```hcl
 module "replace_firenet_1_eip" {
-  source = "/mnt/c/Users/Dennis/repositories/Modules/terraform-aviatrix-aws-firenet-eip-replace"
+  source  = "terraform-aviatrix-modules/aws-firenet-eip-replace/aviatrix"
+  version = "1.0.0"    
 
   step             = 1
   firenet_instance = module.<module_name>.aviatrix_firewall_instance[0]
