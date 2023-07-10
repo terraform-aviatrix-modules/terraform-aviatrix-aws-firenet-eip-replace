@@ -49,7 +49,7 @@ output "original_association_id" {
 
 The original association ID we gathered from the output we have created above.
 
-5. Run a `terraform plan`. There should be no changes. This step is to validate that the import was succesful.
+5. Run a `terraform plan`. There should be no changes. This step is to validate that the import was successful.
 
 6. Change `step = 2` in the module to `step = 3` and execute a `terraform plan`, review it and the execute `terraform apply`. This will remove the original EIP association.
 
