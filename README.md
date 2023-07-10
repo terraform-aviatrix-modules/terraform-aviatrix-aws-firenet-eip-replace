@@ -1,101 +1,73 @@
-# terraform-aviatrix-module-template
-
-This repository provides standardized instructions and conventions for creating Aviatrix modules.
-
-#### Instructions
-1. Create a new repository from this template, by clicking the green "Use this template" button. Make sure to use the [module naming convention](#module-naming-convention)
-2. Clone the repository to your system with ```git clone <repository>```
-5. Edit the repository and commit and update the new repository:
-    - Commit changes: ```git commit -am "Description of changes"```
-    - Push to repository: ```git push origin master```
-6. Update the readme.md file
-    - Remove all content above [the line](#delete-everything-above-and-including-this-line).
-    - Fill out the rest of file based on the provided template.
-7. When ready for release, create a [tag](#tagging).
-
-#### Conventions
-
-###### Repositories
-- For each module, a new reposity shall be created. This is for the purpose of:
-    - Version control per module
-    - Issue handling/feature requests per module
-    - Easier consumption of the module in projects and publication in registers like Terraform Cloud
-
-###### Module Naming convention
-We will use the following convention for naming repositories:
-
-**terraform-aviatrix-\<cloudname or mc for multi-cloud>-\<function>**
-
-Function can be a single word, or more if required to accurately describe the module function. These should be seperated by hyphens. Example:
-
-**terraform-aviatrix-aws-transit-firenet**
-
-###### Resource Naming convention
-```A naming convention for objects created through our modules needs to be decided upon and inserted here.```
-
-###### Tagging
-In order to use modules, it is best practice to tag versions when they are ready for consumption. The format to be used for this is "vx.x.x" e.g. v0.0.1. This can be done on Github by clicking "Create a new release". It is also possible to do this from your system. Make sure you committed your changes to the master branch. After that, create a new tag with ```git tag vx.x.x``` and push the tagged version to the tagged branch with ```git push origin vx.x.x```.
-
-As soon as a module is ready for publishing publicly, the tag release should move up to the first major release. A tag v1.0.0 should be created and the repository can now be altered from a private to a public.
-
-###### Module layout
-The repository contains the default file layout that is recommended to use.
-file | use
-:---|:---
-main.tf | This should contain the resources to be created
-variables.tf | This should contain all expected input variables
-output.tf | This should contain all output objects
-
-Diagram images used in the readme.md should be stored on a publicly available environment. E.g. a public s3 bucket. The reason for that is, when publishing these modules at some point (e.g. Terraform Registry), the image source should always be publicly accessible, even though the repository itself might not be.
-
-
-#### Delete everything above and including this line
-***
-
-# Repository Name
+# terraform-aviatrix-aws-firenet-eip-replace
 
 ### Description
-\<Provide a description of the module>
+This module helps users swap out the EIP assigned to a firenet instance's egress interface for a specified one.
 
-### Diagram
-\<Provide a diagram of the high level constructs thet will be created by this module>
-<img src="<IMG URL>"  height="250">
+It assumes you have already deployed the firenet instance(s). E.g. through the [firenet module](https://github.com/terraform-aviatrix-modules/terraform-aviatrix-mc-firenet).
+
+### Additional information
+- The Aviatrix Terraform provider does not track the egress elastic IP after the initial creation. Because of this, changing it will not cause Terraform state drift.
+- The Aviatrix controller will not become aware of the new elastic IP. Because of this, it will not attempt to delete it on deletion of the firenet instance in the future.
+- This module will not deallocate the new EIP upon execuitng a `destroy`. It will only remove the association with the firenet instance.
+- The controller to firenet instance communication (vendor integration and monitoring) will take place either on the LAN or Management interface. As such, changing the egress EIP will not interfere with normal operations.
 
 ### Compatibility
 Module version | Terraform version | Controller version | Terraform provider version
 :--- | :--- | :--- | :---
-v1.0.2 | 0.12 | 6.1 | 0.2.16
-v1.0.1 | | |
-v1.0.0 | | |
+v1.0.0 | >=1.0 | >=7.0 | >= 3.0.0
 
-### Usage Example
-```
-module "transit_aws_1" {
-  source  = "terraform-aviatrix-modules/aws-transit/aviatrix"
-  version = "1.0.0"
+### Steps
 
-  cidr = "10.1.0.0/20"
-  region = "eu-west-1"
-  aws_account_name = "AWS"
+1. Create a new EIP allocation through the AWS console or Terraform. We will need the allocation ID later on. This will become the new egress IP of the Firenet (NGFW) instance. In this example we use a data source to select an EIP allocation previously created through the AWS console.
+```hcl
+data "aws_eip" "new_eip" {
+  public_ip = "18.193.25.243"
 }
 ```
+
+2. Gather the association ID of the current EIP association by adding the module and output below. We need to refer the module to the firenet instance that was created previously, for example through the [firenet module](https://github.com/terraform-aviatrix-modules/terraform-aviatrix-mc-firenet). This returns a list of all created firenet instances as an output. Use the list index to specify which instance you want to select. Change \<module_name\> to whatever name you have given the firenet module. We will also provide the new EIP allocation ID while we're at it.
+```hcl
+module "replace_firenet_1_eip" {
+  source = "/mnt/c/Users/Dennis/repositories/Modules/terraform-aviatrix-aws-firenet-eip-replace"
+
+  step             = 1
+  firenet_instance = module.<module_name>.aviatrix_firewall_instance[0]
+  new_ip_alloc     = data.aws_eip.new_eip.id
+}
+
+output "original_association_id" {
+  value = module.replace_firenet_1_eip.association_id
+}
+```
+
+3. Change `step = 1` in the module to `step = 2`. This will enable a resoure in the module against which we will import the original EIP association.
+
+4. Now that we have the original EIP association id, we can import that against a resource in the module. On the cli use the import command, or if you're running through a CI/CD pipeline and on Terraform 1.5+, use the [import statement](https://developer.hashicorp.com/terraform/language/import). Change \<module_name\> to whatever name you have given the module. In the above example we used "replace_firenet_1_eip"
+
+```terraform import module.<module_name>.aws_eip_association.original_association[0] <original_association id>```
+
+The original association ID we gathered from the output we have created above.
+
+5. Run a `terraform plan`. There should be no changes. This step is to validate that the import was succesful.
+
+6. Change `step = 2` in the module to `step = 3` and execute a `terraform plan`, review it and the execute `terraform apply`. This will remove the original EIP association.
+
+7. Change `step = 3` in the module to `step = 4` and execute a `terraform plan`, review it and the execute `terraform apply`. This will create the association with the new EIP.
+
+8. (Optional) The old EIP is now deallocated. You can chose to release it now or at any time in the future to prevent charges. DO NOT REUSE IT FOR OTHER PURPOSES. The controller is still aware of this EIP as the original EIP it launched the Firenet instance with and will attempt to clean it up if you ever delete the firenet instances.
 
 ### Variables
 The following variables are required:
 
 key | value
 :--- | :---
-\<keyname> | \<description of value that should be provided in this variable>
-
-The following variables are optional:
-
-key | default | value 
-:---|:---|:---
-\<keyname> | \<default value> | \<description of value that should be provided in this variable>
+new_ip_alloc | The EIP allocation to be assigned to the Firenet instance
+firenet_instance | The firenet instance resource
+step | The current step in the migration process as descibed above.
 
 ### Outputs
 This module will return the following outputs:
 
 key | description
 :---|:---
-\<keyname> | \<description of object that will be returned in this output>
+association_id | The association ID of the originally assigned EIP.
