@@ -55,7 +55,7 @@ The original association ID we gathered from the output we have created above.
 
 7. Change `step = 3` in the module to `step = 4` and execute a `terraform plan`, review it and the execute `terraform apply`. This will create the association with the new EIP.
 
-8. (Optional) The old EIP is now deallocated. You can choose to release it now or at any time in the future to prevent charges. DO NOT REUSE IT FOR OTHER PURPOSES. The controller is still aware of this EIP as the original EIP it launched the Firenet instance with and will attempt to clean it up if you ever delete the firenet instances.
+8. (Optional) The old EIP is now disaccociated. You can choose to release it now or at any time in the future to prevent charges. DO NOT REUSE IT FOR OTHER PURPOSES. The controller is still aware of this EIP as the original EIP it launched the Firenet instance with and will attempt to clean it up if you ever delete the firenet instances.
 
 ### Variables
 The following variables are required:
